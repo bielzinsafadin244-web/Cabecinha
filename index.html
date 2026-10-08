@@ -1,0 +1,1135 @@
+```html
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quebra-Cabeça com Encaixes Perfeitos</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+            background-color: #000000;
+            color: #f8fafc;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .glass-card {
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .glass-btn {
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            transition: all 0.2s ease;
+        }
+        .glass-btn:hover {
+            background: rgba(59, 130, 246, 0.35);
+            border-color: rgba(96, 165, 250, 0.6);
+            transform: translateY(-2px);
+        }
+
+        /* Tray Scrollbar styling */
+        ::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090d16;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Fixed Canvas Board Container */
+        .board-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+
+        #puzzleCanvas {
+            touch-action: none;
+            display: block;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Floating Drag Piece Canvas */
+        #floatingDragCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 99999;
+            display: none;
+            filter: drop-shadow(0 15px 25px rgba(0,0,0,0.8));
+            transform: translate3d(0, 0, 0);
+        }
+
+        .tray-item {
+            cursor: grab;
+            transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            touch-action: pan-x;
+            -webkit-user-drag: none;
+        }
+        .tray-item:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body class="flex flex-col justify-between select-none relative">
+
+    <input type="file" id="imageFileInput" accept="image/*" class="hidden">
+    <canvas id="floatingDragCanvas"></canvas>
+
+    <!-- SCREEN 1: START SCREEN WITH UPLOAD FOCUS -->
+    <div id="screenStart" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 transition-all duration-300 overflow-y-auto pointer-events-auto">
+        <div class="max-w-xl w-full text-center space-y-6 glass-card p-6 md:p-10 rounded-3xl shadow-2xl border border-blue-500/25 my-auto pointer-events-auto">
+            <div class="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-inner mb-1 animate-pulse">
+                <i class="fa-solid fa-puzzle-piece text-4xl"></i>
+            </div>
+
+            <div class="space-y-2">
+                <h1 class="text-2xl md:text-3xl font-extrabold text-white tracking-tight leading-tight">
+                    Quebra-Cabeça Personalizado
+                </h1>
+                <p class="text-slate-300 text-xs md:text-sm max-w-md mx-auto font-medium">
+                    Envie sua própria imagem ou foto para montar o quebra-cabeça com encaixes interligados perfeitos.
+                </p>
+            </div>
+
+            <!-- Current Image Preview Card -->
+            <div class="space-y-2">
+                <label class="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                    <i class="fa-solid fa-image text-blue-400 mr-1"></i> Imagem Selecionada para o Jogo:
+                </label>
+                <div class="w-full h-44 sm:h-52 bg-slate-900/90 rounded-2xl border border-slate-700/80 p-2 flex items-center justify-center overflow-hidden shadow-inner relative group cursor-pointer" id="uploadThumbContainer">
+                    <canvas id="startThumbCanvas" class="w-full h-full object-contain rounded-xl pointer-events-none"></canvas>
+                    <div id="uploadBadgeOverlay" class="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                        <span class="text-xs bg-blue-600 text-white font-bold px-3 py-1.5 rounded-xl shadow-lg">Clique para Carregar Nova Imagem</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-3 pt-2">
+                <button id="btnUploadStart" type="button" class="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-white rounded-2xl border border-slate-700 transition flex items-center justify-center space-x-3 text-sm md:text-base font-bold shadow-lg cursor-pointer">
+                    <i class="fa-solid fa-upload text-blue-400 text-lg"></i>
+                    <span id="uploadBtnLabel">Carregar Imagem do Dispositivo</span>
+                </button>
+
+                <button id="btnPlayStart" type="button" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black text-base md:text-lg rounded-2xl shadow-xl transition transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center space-x-3 cursor-pointer">
+                    <i class="fa-solid fa-play text-lg"></i>
+                    <span>AVANÇAR PARA DIFICULDADE</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 2: DIFFICULTY SELECTION SCREEN -->
+    <div id="screenDifficulty" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 sm:p-6 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 hidden transition-all duration-300 overflow-y-auto pointer-events-auto">
+        <div class="max-w-2xl w-full text-center space-y-6 glass-card p-6 md:p-10 rounded-3xl shadow-2xl border border-blue-500/25 my-auto pointer-events-auto">
+            <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
+                <button id="btnBackToStart" type="button" class="px-3 py-2 text-slate-300 hover:text-white glass-btn rounded-xl flex items-center space-x-2 text-xs md:text-sm cursor-pointer">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Voltar</span>
+                </button>
+                <h2 class="text-lg md:text-2xl font-bold text-white">Escolha a Dificuldade</h2>
+                <div class="w-16"></div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+                <button data-grid="3" type="button" class="difficulty-card p-4 md:p-5 glass-card hover:bg-blue-600/20 border border-slate-700 hover:border-blue-400 rounded-2xl transition text-left group flex items-center space-x-4 cursor-pointer pointer-events-auto">
+                    <div class="p-3.5 bg-emerald-500/20 text-emerald-400 rounded-xl group-hover:scale-110 transition shrink-0 pointer-events-none">
+                        <i class="fa-solid fa-border-all text-2xl"></i>
+                    </div>
+                    <div class="pointer-events-none">
+                        <h3 class="font-bold text-white text-base md:text-lg">Fácil</h3>
+                        <p class="text-xs text-slate-400">3x3 (9 Peças)</p>
+                    </div>
+                </button>
+
+                <button data-grid="4" type="button" class="difficulty-card p-4 md:p-5 glass-card hover:bg-blue-600/20 border border-slate-700 hover:border-blue-400 rounded-2xl transition text-left group flex items-center space-x-4 cursor-pointer pointer-events-auto">
+                    <div class="p-3.5 bg-blue-500/20 text-blue-400 rounded-xl group-hover:scale-110 transition shrink-0 pointer-events-none">
+                        <i class="fa-solid fa-table-cells text-2xl"></i>
+                    </div>
+                    <div class="pointer-events-none">
+                        <h3 class="font-bold text-white text-base md:text-lg">Médio</h3>
+                        <p class="text-xs text-slate-400">4x4 (16 Peças)</p>
+                    </div>
+                </button>
+
+                <button data-grid="5" type="button" class="difficulty-card p-4 md:p-5 glass-card hover:bg-blue-600/20 border border-slate-700 hover:border-blue-400 rounded-2xl transition text-left group flex items-center space-x-4 cursor-pointer pointer-events-auto">
+                    <div class="p-3.5 bg-amber-500/20 text-amber-400 rounded-xl group-hover:scale-110 transition shrink-0 pointer-events-none">
+                        <i class="fa-solid fa-table-cells-large text-2xl"></i>
+                    </div>
+                    <div class="pointer-events-none">
+                        <h3 class="font-bold text-white text-base md:text-lg">Difícil</h3>
+                        <p class="text-xs text-slate-400">5x5 (25 Peças)</p>
+                    </div>
+                </button>
+
+                <button data-grid="6" type="button" class="difficulty-card p-4 md:p-5 glass-card hover:bg-blue-600/20 border border-slate-700 hover:border-blue-400 rounded-2xl transition text-left group flex items-center space-x-4 cursor-pointer pointer-events-auto">
+                    <div class="p-3.5 bg-rose-500/20 text-rose-400 rounded-xl group-hover:scale-110 transition shrink-0 pointer-events-none">
+                        <i class="fa-solid fa-grid-2 text-2xl"></i>
+                    </div>
+                    <div class="pointer-events-none">
+                        <h3 class="font-bold text-white text-base md:text-lg">Expert</h3>
+                        <p class="text-xs text-slate-400">6x6 (36 Peças)</p>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCREEN 2.5: PREVIEW MODAL -->
+    <div id="screenPreview" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex flex-col items-center justify-center p-4 hidden transition-all duration-300 pointer-events-auto">
+        <div class="max-w-md w-full glass-card rounded-3xl p-5 text-center space-y-4 border border-blue-500/30 shadow-2xl pointer-events-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <span class="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center space-x-1.5">
+                    <i class="fa-solid fa-eye text-amber-400"></i>
+                    <span>Prévia da Imagem</span>
+                </span>
+                <span id="previewTimerBadge" class="bg-blue-600/30 text-blue-300 border border-blue-500/40 font-mono font-extrabold px-3 py-0.5 rounded-full text-xs">3s</span>
+            </div>
+
+            <div class="bg-white p-2 rounded-2xl shadow-xl border border-slate-700 overflow-hidden">
+                <img id="previewModalImg" class="w-full h-auto object-contain rounded-lg max-h-[50vh]" alt="Prévia da Imagem">
+            </div>
+
+            <p class="text-xs text-slate-300 font-medium">Memorize a imagem! O jogo começará em instantes.</p>
+
+            <button id="btnSkipPreview" type="button" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg transition active:scale-95 flex items-center justify-center space-x-2 cursor-pointer">
+                <span>Começar Agora</span>
+                <i class="fa-solid fa-play text-xs"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- SCREEN 3: MAIN GAME SCREEN -->
+    <div id="screenGame" class="flex-1 flex flex-col justify-between h-full w-full relative hidden">
+        <!-- Top Navigation & Stats Bar -->
+        <header class="glass-card z-20 px-3 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 shadow-lg w-full max-w-full">
+            <div class="flex items-center space-x-2">
+                <button id="btnBackToDifficulty" type="button" title="Mudar Dificuldade" class="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition active:scale-95 text-xs sm:text-sm cursor-pointer">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <div class="flex items-center space-x-1.5">
+                    <i class="fa-solid fa-puzzle-piece text-blue-400 text-sm"></i>
+                    <h1 class="font-bold text-xs text-white hidden md:block">Quebra-Cabeça Interligado</h1>
+                </div>
+            </div>
+
+            <!-- Puzzle Stats -->
+            <div class="flex items-center space-x-2 sm:space-x-4 text-xs">
+                <!-- Timer -->
+                <div class="bg-slate-900/90 px-3 py-1 rounded-xl border border-slate-700/80 flex items-center space-x-2">
+                    <i class="fa-regular fa-clock text-blue-400"></i>
+                    <span id="timer" class="font-mono font-bold text-slate-200">00:00</span>
+                </div>
+
+                <!-- Move Counter -->
+                <div class="bg-slate-900/90 px-3 py-1 rounded-xl border border-slate-700/80 flex items-center space-x-2">
+                    <i class="fa-solid fa-arrows-up-down-left-right text-emerald-400"></i>
+                    <span id="moves" class="font-mono font-bold text-slate-200">0</span>
+                </div>
+
+                <!-- Progress -->
+                <div class="bg-slate-900/90 px-3 py-1 rounded-xl border border-slate-700/80 flex items-center space-x-2">
+                    <i class="fa-solid fa-puzzle-piece text-amber-400"></i>
+                    <span id="progress" class="font-mono font-bold text-slate-200">0/16</span>
+                </div>
+            </div>
+
+            <!-- Quick Action Controls -->
+            <div class="flex items-center space-x-1.5 sm:space-x-2">
+                <button id="guideBtn" type="button" title="Segure para ver o Guia" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl border border-slate-700 transition text-xs cursor-pointer">
+                    <i class="fa-solid fa-lightbulb"></i>
+                </button>
+
+                <button id="soundBtn" type="button" title="Ativar/Desativar Som" class="p-2 bg-slate-800 hover:bg-slate-700 text-blue-400 rounded-xl border border-slate-700 transition text-xs cursor-pointer">
+                    <i class="fa-solid fa-volume-high"></i>
+                </button>
+
+                <button id="headerUploadBtn" type="button" title="Carregar Nova Imagem" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-xl border border-slate-700 transition text-xs cursor-pointer">
+                    <i class="fa-solid fa-upload"></i>
+                </button>
+
+                <button id="restartBtn" type="button" title="Embaralhar Peças" class="p-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition text-xs cursor-pointer">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Top Piece Tray Container (Organized & Visible) -->
+        <div class="glass-card z-20 px-4 py-3 h-32 md:h-36 flex items-center space-x-2 border-b border-slate-800 shadow-2xl shrink-0 relative">
+            <button id="trayScrollLeft" type="button" title="Rolar para Esquerda" class="absolute left-1 z-30 p-2.5 bg-slate-900/90 hover:bg-slate-800 text-blue-400 rounded-full border border-slate-700 shadow-xl cursor-pointer">
+                <i class="fa-solid fa-chevron-left text-xs"></i>
+            </button>
+            <div id="pieceTrayContainer" class="flex-1 flex items-center overflow-x-auto overflow-y-hidden space-x-4 px-8 h-full" style="touch-action: pan-x; -webkit-overflow-scrolling: touch;">
+                <div class="text-xs font-extrabold text-slate-300 uppercase tracking-widest select-none flex flex-col items-center justify-center bg-slate-900/80 p-2 rounded-xl border border-slate-700/80 shrink-0">
+                    <i class="fa-solid fa-puzzle-piece text-blue-400 text-lg mb-1"></i>
+                    <span>Peças</span>
+                </div>
+                <div id="pieceTray" class="flex items-center space-x-4 h-full min-w-max px-2">
+                    <!-- Dynamic pieces inserted here -->
+                </div>
+            </div>
+            <button id="trayScrollRight" type="button" title="Rolar para Direita" class="absolute right-1 z-30 p-2.5 bg-slate-900/90 hover:bg-slate-800 text-blue-400 rounded-full border border-slate-700 shadow-xl cursor-pointer">
+                <i class="fa-solid fa-chevron-right text-xs"></i>
+            </button>
+        </div>
+
+        <!-- Main Interactive Workspace -->
+        <main class="flex-1 relative overflow-hidden flex items-center justify-center p-3 bg-black min-h-0" id="dropArea">
+            <div id="boardWrapper" class="board-wrapper">
+                <canvas id="puzzleCanvas" class="border border-slate-800"></canvas>
+            </div>
+        </main>
+    </div>
+
+    <!-- SCREEN 4: VICTORY SCREEN -->
+    <div id="screenVictory" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center hidden p-4 pointer-events-auto">
+        <div class="max-w-lg w-full glass-card rounded-3xl p-6 text-center space-y-6 border border-emerald-500/40 shadow-2xl relative overflow-hidden pointer-events-auto">
+            <div class="space-y-1">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-full border border-emerald-500/30 text-3xl shadow-lg mb-1">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+                <h2 class="text-3xl font-extrabold text-white">PARABÉNS!</h2>
+                <p class="text-slate-200 text-sm font-medium">Você completou o quebra-cabeça com perfeição!</p>
+            </div>
+
+            <div class="flex justify-center items-center py-1">
+                <div id="victoryImageWrapper" class="p-2 bg-white rounded-2xl shadow-2xl border-2 border-emerald-400 max-w-md overflow-hidden">
+                    <img id="victoryImg" class="w-full h-auto object-contain rounded-lg" alt="Imagem Completa">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 py-2 bg-slate-900/90 rounded-2xl p-4 border border-slate-800">
+                <div class="text-center">
+                    <span class="text-xs text-slate-400 block">Tempo Total</span>
+                    <span id="finalTime" class="text-xl font-mono font-bold text-blue-400">00:00</span>
+                </div>
+                <div class="text-center">
+                    <span class="text-xs text-slate-400 block">Movimentos</span>
+                    <span id="finalMoves" class="text-xl font-mono font-bold text-emerald-400">0</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button id="btnPlayAgain" type="button" class="py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl shadow-lg transition active:scale-95 flex items-center justify-center space-x-2 cursor-pointer">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>Jogar de Novo</span>
+                </button>
+                <button id="btnReturnMenu" type="button" class="py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl border border-slate-700 transition active:scale-95 flex items-center justify-center space-x-2 cursor-pointer">
+                    <i class="fa-solid fa-house"></i>
+                    <span>Menu Inicial</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SoundEffects {
+            constructor() {
+                this.enabled = true;
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playSnap() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(350, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.1);
+            }
+
+            playPick() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(200, now + 0.06);
+
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.06);
+            }
+
+            playError() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.linearRampToValueAtTime(110, now + 0.2);
+
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.2);
+            }
+
+            playWin() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99];
+                
+                notes.forEach((freq, index) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    const startTime = now + index * 0.09;
+
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, startTime);
+
+                    gain.gain.setValueAtTime(0, startTime);
+                    gain.gain.linearRampToValueAtTime(0.35, startTime + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.45);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(startTime);
+                    osc.stop(startTime + 0.45);
+                });
+            }
+        }
+
+        const sound = new SoundEffects();
+
+        // Default Abstract Geometric Art Generator for instant play without upload
+        function generateDefaultArt() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1200;
+            canvas.height = 900;
+            const ctx = canvas.getContext('2d');
+
+            const grad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            grad.addColorStop(0, '#1e1b4b');
+            grad.addColorStop(0.5, '#3b82f6');
+            grad.addColorStop(1, '#065f46');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Geometric shapes
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            for (let i = 0; i < 8; i++) {
+                ctx.beginPath();
+                ctx.arc(150 + i * 130, 200 + (i % 2) * 250, 120, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(100, 100, 1000, 700);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 42px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("QUEBRA-CABEÇA COM ENCAIXES", canvas.width / 2, 420);
+            
+            ctx.font = '24px Inter, sans-serif';
+            ctx.fillStyle = '#93c5fd';
+            ctx.fillText("Carregue sua foto para jogar!", canvas.width / 2, 480);
+
+            return canvas;
+        }
+
+        class JigsawPuzzleEngine {
+            constructor() {
+                this.canvas = document.getElementById('puzzleCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.dragCanvas = document.getElementById('floatingDragCanvas');
+
+                this.baseCanvas = generateDefaultArt();
+                this.img = new Image();
+                this.img.src = this.baseCanvas.toDataURL();
+                this.img.onload = () => {
+                    this.renderStartThumbnail();
+                };
+
+                this.cols = 4;
+                this.rows = 4;
+                this.moves = 0;
+                this.seconds = 0;
+                this.timerInterval = null;
+                this.isCompleted = false;
+                this.showGuide = false;
+                
+                this.flashRedCell = null;
+
+                this.initEvents();
+            }
+
+            renderStartThumbnail() {
+                const thumbCanvas = document.getElementById('startThumbCanvas');
+                if (thumbCanvas) {
+                    thumbCanvas.width = this.img.width;
+                    thumbCanvas.height = this.img.height;
+                    const tCtx = thumbCanvas.getContext('2d');
+                    tCtx.drawImage(this.img, 0, 0);
+                }
+            }
+
+            loadCustomImage(dataUrl) {
+                this.img = new Image();
+                this.img.onload = () => {
+                    this.renderStartThumbnail();
+                };
+                this.img.src = dataUrl;
+            }
+
+            setGridSize(size) {
+                this.cols = parseInt(size);
+                this.rows = parseInt(size);
+            }
+
+            restartGame() {
+                this.moves = 0;
+                this.seconds = 0;
+                this.isCompleted = false;
+                document.getElementById('moves').textContent = '0';
+                document.getElementById('timer').textContent = '00:00';
+                
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                this.timerInterval = setInterval(() => {
+                    if (!this.isCompleted) {
+                        this.seconds++;
+                        const m = String(Math.floor(this.seconds / 60)).padStart(2, '0');
+                        const s = String(this.seconds % 60).padStart(2, '0');
+                        document.getElementById('timer').textContent = `${m}:${s}`;
+                    }
+                }, 1000);
+
+                this.setupPuzzle();
+            }
+
+            generateEdges() {
+                this.hEdges = Array(this.rows + 1).fill(0).map(() => Array(this.cols).fill(0));
+                this.vEdges = Array(this.rows).fill(0).map(() => Array(this.cols + 1).fill(0));
+
+                for (let r = 1; r < this.rows; r++) {
+                    for (let c = 0; c < this.cols; c++) {
+                        this.hEdges[r][c] = Math.random() < 0.5 ? 1 : -1;
+                    }
+                }
+
+                for (let r = 0; r < this.rows; r++) {
+                    for (let c = 1; c < this.cols; c++) {
+                        this.vEdges[r][c] = Math.random() < 0.5 ? 1 : -1;
+                    }
+                }
+            }
+
+            setupPuzzle() {
+                const dropArea = document.getElementById('dropArea');
+                const availW = dropArea.clientWidth - 24;
+                const availH = dropArea.clientHeight - 24;
+                
+                const imgAspect = this.img.width / this.img.height;
+                let boardW = availW;
+                let boardH = boardW / imgAspect;
+                
+                if (boardH > availH) {
+                    boardH = availH;
+                    boardW = boardH * imgAspect;
+                }
+
+                this.canvas.width = Math.floor(boardW);
+                this.canvas.height = Math.floor(boardH);
+
+                this.cellWidth = this.canvas.width / this.cols;
+                this.cellHeight = this.canvas.height / this.rows;
+
+                this.generateEdges();
+
+                this.pieces = [];
+                let id = 0;
+                for (let r = 0; r < this.rows; r++) {
+                    for (let c = 0; c < this.cols; c++) {
+                        this.pieces.push({
+                            id: id++,
+                            correctCol: c,
+                            correctRow: r,
+                            currentCol: null,
+                            currentRow: null,
+                            inTray: true
+                        });
+                    }
+                }
+
+                this.pieces.sort(() => Math.random() - 0.5);
+                
+                document.getElementById('progress').textContent = `0/${this.cols * this.rows}`;
+                this.renderTray();
+                this.drawBoard();
+            }
+
+            buildPiecePath(ctx, c, r, cellW, cellH) {
+                const topTab = (r === 0) ? 0 : -this.hEdges[r][c];
+                const rightTab = (c === this.cols - 1) ? 0 : this.vEdges[r][c + 1];
+                const bottomTab = (r === this.rows - 1) ? 0 : this.hEdges[r + 1][c];
+                const leftTab = (c === 0) ? 0 : -this.vEdges[r][c];
+
+                const x = c * cellW;
+                const y = r * cellH;
+
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+
+                // Top Edge
+                if (topTab === 0) {
+                    ctx.lineTo(x + cellW, y);
+                } else {
+                    const l = cellW;
+                    const h = cellH * 0.2 * topTab;
+                    ctx.lineTo(x + l * 0.35, y);
+                    ctx.bezierCurveTo(x + l * 0.3, y - h, x + l * 0.4, y - h * 1.2, x + l * 0.5, y - h * 1.2);
+                    ctx.bezierCurveTo(x + l * 0.6, y - h * 1.2, x + l * 0.7, y - h, x + l * 0.65, y);
+                    ctx.lineTo(x + l, y);
+                }
+
+                // Right Edge
+                if (rightTab === 0) {
+                    ctx.lineTo(x + cellW, y + cellH);
+                } else {
+                    const l = cellH;
+                    const h = cellW * 0.2 * rightTab;
+                    ctx.lineTo(x + cellW, y + l * 0.35);
+                    ctx.bezierCurveTo(x + cellW + h, y + l * 0.3, x + cellW + h * 1.2, y + l * 0.4, x + cellW + h * 1.2, y + l * 0.5);
+                    ctx.bezierCurveTo(x + cellW + h * 1.2, y + l * 0.6, x + cellW + h, y + l * 0.7, x + cellW, y + l * 0.65);
+                    ctx.lineTo(x + cellW, y + cellH);
+                }
+
+                // Bottom Edge
+                if (bottomTab === 0) {
+                    ctx.lineTo(x, y + cellH);
+                } else {
+                    const l = cellW;
+                    const h = cellH * 0.2 * bottomTab;
+                    ctx.lineTo(x + l * 0.65, y + cellH);
+                    ctx.bezierCurveTo(x + l * 0.7, y + cellH + h, x + l * 0.6, y + cellH + h * 1.2, x + l * 0.5, y + cellH + h * 1.2);
+                    ctx.bezierCurveTo(x + l * 0.4, y + cellH + h * 1.2, x + l * 0.3, y + cellH + h, x + l * 0.35, y + cellH);
+                    ctx.lineTo(x, y + cellH);
+                }
+
+                // Left Edge
+                if (leftTab === 0) {
+                    ctx.lineTo(x, y);
+                } else {
+                    const l = cellH;
+                    const h = cellW * 0.2 * leftTab;
+                    ctx.lineTo(x, y + l * 0.65);
+                    ctx.bezierCurveTo(x - h, y + l * 0.7, x - h * 1.2, y + l * 0.6, x - h * 1.2, y + l * 0.5);
+                    ctx.bezierCurveTo(x - h * 1.2, y + l * 0.4, x - h, y + l * 0.3, x, y + l * 0.35);
+                    ctx.lineTo(x, y);
+                }
+
+                ctx.closePath();
+            }
+
+            renderTray() {
+                const tray = document.getElementById('pieceTray');
+                tray.innerHTML = '';
+
+                const piecesInTray = this.pieces.filter(p => p.inTray);
+                
+                if (piecesInTray.length === 0) {
+                    tray.innerHTML = '<span class="text-xs text-emerald-400 font-bold px-4">Todas as peças foram colocadas!</span>';
+                    return;
+                }
+
+                piecesInTray.forEach(p => {
+                    const canvas = document.createElement('canvas');
+                    const pad = 12;
+                    const thumbW = 90;
+                    const thumbH = 90 * (this.cellHeight / this.cellWidth);
+                    
+                    canvas.width = Math.floor(thumbW + pad * 2);
+                    canvas.height = Math.floor(thumbH + pad * 2);
+                    canvas.className = 'tray-item rounded-2xl border-2 border-slate-700 bg-slate-900/90 shadow-xl shrink-0 p-1 hover:border-blue-500 transition cursor-grab active:cursor-grabbing';
+                    canvas.setAttribute('data-piece-id', p.id);
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.save();
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    const scaleX = thumbW / this.cellWidth;
+                    const scaleY = thumbH / this.cellHeight;
+                    ctx.scale(scaleX, scaleY);
+
+                    ctx.translate(pad / scaleX - p.correctCol * this.cellWidth, pad / scaleY - p.correctRow * this.cellHeight);
+
+                    ctx.save();
+                    this.buildPiecePath(ctx, p.correctCol, p.correctRow, this.cellWidth, this.cellHeight);
+                    ctx.clip();
+
+                    if (this.img.complete && this.img.naturalWidth > 0) {
+                        ctx.drawImage(
+                            this.img,
+                            0, 0, this.img.width, this.img.height,
+                            0, 0, this.canvas.width, this.canvas.height
+                        );
+                    }
+                    ctx.restore();
+
+                    ctx.lineWidth = 2.5 / scaleX;
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+                    this.buildPiecePath(ctx, p.correctCol, p.correctRow, this.cellWidth, this.cellHeight);
+                    ctx.stroke();
+
+                    ctx.restore();
+                    tray.appendChild(canvas);
+                });
+            }
+
+            drawBoard() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                if (this.showGuide && this.img.complete && this.img.naturalWidth > 0) {
+                    this.ctx.save();
+                    this.ctx.globalAlpha = 0.42;
+                    this.ctx.drawImage(
+                        this.img,
+                        0, 0, this.img.width, this.img.height,
+                        0, 0, this.canvas.width, this.canvas.height
+                    );
+                    this.ctx.restore();
+
+                    // Desenha o contorno de todas as peças sobre a imagem de fundo quando o guia está ativo
+                    for (let r = 0; r < this.rows; r++) {
+                        for (let c = 0; c < this.cols; c++) {
+                            this.ctx.save();
+                            this.ctx.lineWidth = 1.8;
+                            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+                            this.buildPiecePath(this.ctx, c, r, this.cellWidth, this.cellHeight);
+                            this.ctx.stroke();
+                            this.ctx.restore();
+                        }
+                    }
+                }
+
+                for (let r = 0; r < this.rows; r++) {
+                    for (let c = 0; c < this.cols; c++) {
+                        const placedPiece = this.pieces.find(p => !p.inTray && p.currentCol === c && p.currentRow === r);
+                        if (placedPiece) {
+                            this.ctx.save();
+                            this.buildPiecePath(this.ctx, c, r, this.cellWidth, this.cellHeight);
+                            this.ctx.clip();
+
+                            this.ctx.drawImage(
+                                this.img,
+                                0, 0, this.img.width, this.img.height,
+                                0, 0, this.canvas.width, this.canvas.height
+                            );
+                            this.ctx.restore();
+
+                            this.ctx.lineWidth = 1.5;
+                            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                            this.buildPiecePath(this.ctx, c, r, this.cellWidth, this.cellHeight);
+                            this.ctx.stroke();
+                        }
+
+                        if (this.flashRedCell && this.flashRedCell.c === c && this.flashRedCell.r === r) {
+                            this.ctx.save();
+                            this.ctx.fillStyle = 'rgba(239, 68, 68, 0.55)';
+                            this.buildPiecePath(this.ctx, c, r, this.cellWidth, this.cellHeight);
+                            this.ctx.fill();
+                            this.ctx.restore();
+                        }
+                    }
+                }
+            }
+
+            initEvents() {
+                let draggedPieceId = null;
+
+                const startDrag = (pieceId, clientX, clientY) => {
+                    if (pieceId === undefined || pieceId === null) return;
+                    draggedPieceId = parseInt(pieceId);
+                    const piece = this.pieces.find(p => p.id === draggedPieceId);
+                    if (!piece) return;
+
+                    sound.playPick();
+
+                    document.querySelectorAll('.tray-item').forEach(el => {
+                        if (el.getAttribute('data-piece-id') === String(draggedPieceId)) {
+                            el.classList.add('opacity-40', 'scale-95', 'border-blue-400');
+                        }
+                    });
+
+                    const pad = 12;
+                    const dCanvas = this.dragCanvas;
+                    dCanvas.width = Math.floor(this.cellWidth + pad * 2);
+                    dCanvas.height = Math.floor(this.cellHeight + pad * 2);
+                    dCanvas.style.display = 'block';
+                    dCanvas.style.left = `${clientX - dCanvas.width / 2}px`;
+                    dCanvas.style.top = `${clientY - dCanvas.height / 2}px`;
+
+                    const dCtx = dCanvas.getContext('2d');
+                    dCtx.save();
+                    dCtx.clearRect(0, 0, dCanvas.width, dCanvas.height);
+                    dCtx.translate(pad - piece.correctCol * this.cellWidth, pad - piece.correctRow * this.cellHeight);
+
+                    dCtx.save();
+                    this.buildPiecePath(dCtx, piece.correctCol, piece.correctRow, this.cellWidth, this.cellHeight);
+                    dCtx.clip();
+
+                    if (this.img.complete && this.img.naturalWidth > 0) {
+                        dCtx.drawImage(
+                            this.img,
+                            0, 0, this.img.width, this.img.height,
+                            0, 0, this.canvas.width, this.canvas.height
+                        );
+                    }
+                    dCtx.restore();
+
+                    dCtx.lineWidth = 3;
+                    dCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+                    this.buildPiecePath(dCtx, piece.correctCol, piece.correctRow, this.cellWidth, this.cellHeight);
+                    dCtx.stroke();
+                    dCtx.restore();
+                };
+
+                const moveDrag = (clientX, clientY) => {
+                    const dCanvas = this.dragCanvas;
+                    dCanvas.style.left = `${clientX - dCanvas.width / 2}px`;
+                    dCanvas.style.top = `${clientY - dCanvas.height / 2}px`;
+                };
+
+                const endDrag = (clientX, clientY) => {
+                    if (draggedPieceId === null) return;
+                    this.dragCanvas.style.display = 'none';
+
+                    document.querySelectorAll('.tray-item').forEach(el => {
+                        el.classList.remove('opacity-40', 'scale-95', 'border-blue-400');
+                    });
+
+                    const rect = this.canvas.getBoundingClientRect();
+                    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                        const x = clientX - rect.left;
+                        const y = clientY - rect.top;
+
+                        const c = Math.floor(x / this.cellWidth);
+                        const r = Math.floor(y / this.cellHeight);
+
+                        const piece = this.pieces.find(p => p.id === draggedPieceId);
+                        if (piece) {
+                            this.moves++;
+                            document.getElementById('moves').textContent = this.moves;
+
+                            if (piece.correctCol === c && piece.correctRow === r) {
+                                piece.inTray = false;
+                                piece.currentCol = c;
+                                piece.currentRow = r;
+                                sound.playSnap();
+
+                                const placedCount = this.pieces.filter(p => !p.inTray).length;
+                                document.getElementById('progress').textContent = `${placedCount}/${this.cols * this.rows}`;
+
+                                this.renderTray();
+                                this.drawBoard();
+
+                                if (placedCount === this.pieces.length) {
+                                    this.triggerVictory();
+                                }
+                            } else {
+                                sound.playError();
+                                this.flashRedCell = { c, r };
+                                this.drawBoard();
+                                setTimeout(() => {
+                                    this.flashRedCell = null;
+                                    this.drawBoard();
+                                }, 350);
+                            }
+                        }
+                    }
+
+                    draggedPieceId = null;
+                };
+
+                // Use Pointer Events for seamless cross-platform touch and mouse dragging
+                const tray = document.getElementById('pieceTray');
+                tray.addEventListener('pointerdown', (e) => {
+                    const item = e.target.closest('.tray-item');
+                    if (item) {
+                        e.preventDefault();
+                        const pieceId = item.getAttribute('data-piece-id');
+                        startDrag(pieceId, e.clientX, e.clientY);
+                        try {
+                            item.setPointerCapture(e.pointerId);
+                        } catch (err) {}
+                    }
+                });
+
+                window.addEventListener('pointermove', (e) => {
+                    if (draggedPieceId !== null) {
+                        e.preventDefault();
+                        moveDrag(e.clientX, e.clientY);
+                    }
+                });
+
+                window.addEventListener('pointerup', (e) => {
+                    if (draggedPieceId !== null) {
+                        e.preventDefault();
+                        endDrag(e.clientX, e.clientY);
+                    }
+                });
+
+                window.addEventListener('pointercancel', (e) => {
+                    if (draggedPieceId !== null) {
+                        this.dragCanvas.style.display = 'none';
+                        document.querySelectorAll('.tray-item').forEach(el => {
+                            el.classList.remove('opacity-40', 'scale-95', 'border-blue-400');
+                        });
+                        draggedPieceId = null;
+                        this.drawBoard();
+                    }
+                });
+
+                const guideBtn = document.getElementById('guideBtn');
+                if (guideBtn) {
+                    const activateGuide = (e) => {
+                        e.preventDefault();
+                        this.showGuide = true;
+                        guideBtn.classList.add('bg-amber-600', 'text-white', 'border-amber-400');
+                        this.drawBoard();
+                    };
+                    const deactivateGuide = (e) => {
+                        e.preventDefault();
+                        this.showGuide = false;
+                        guideBtn.classList.remove('bg-amber-600', 'text-white', 'border-amber-400');
+                        this.drawBoard();
+                    };
+
+                    guideBtn.addEventListener('pointerdown', activateGuide);
+                    guideBtn.addEventListener('pointerup', deactivateGuide);
+                    guideBtn.addEventListener('pointerleave', deactivateGuide);
+                }
+
+                document.getElementById('soundBtn').addEventListener('click', (e) => {
+                    sound.enabled = !sound.enabled;
+                    e.currentTarget.innerHTML = sound.enabled ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
+                });
+
+                document.getElementById('restartBtn').addEventListener('click', () => {
+                    this.restartGame();
+                });
+
+                const scrollLeftBtn = document.getElementById('trayScrollLeft');
+                const scrollRightBtn = document.getElementById('trayScrollRight');
+                const trayContainer = document.getElementById('pieceTrayContainer');
+
+                if (scrollLeftBtn && trayContainer) {
+                    scrollLeftBtn.addEventListener('click', () => {
+                        trayContainer.scrollBy({ left: -220, behavior: 'smooth' });
+                    });
+                }
+                if (scrollRightBtn && trayContainer) {
+                    scrollRightBtn.addEventListener('click', () => {
+                        trayContainer.scrollBy({ left: 220, behavior: 'smooth' });
+                    });
+                }
+            }
+
+            triggerVictory() {
+                this.isCompleted = true;
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                sound.playWin();
+
+                const victoryModal = document.getElementById('screenVictory');
+                const victoryImg = document.getElementById('victoryImg');
+                victoryImg.src = this.img.src;
+
+                document.getElementById('finalTime').textContent = document.getElementById('timer').textContent;
+                document.getElementById('finalMoves').textContent = this.moves;
+
+                victoryModal.classList.remove('hidden');
+
+                if (typeof confetti === 'function') {
+                    confetti({
+                        particleCount: 150,
+                        spread: 90,
+                        origin: { y: 0.6 }
+                    });
+                }
+            }
+        }
+
+        const showScreen = (screenId) => {
+            ['screenStart', 'screenDifficulty', 'screenPreview', 'screenGame', 'screenVictory'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+            const target = document.getElementById(screenId);
+            if (target) target.classList.remove('hidden');
+        };
+
+        window.addEventListener('load', () => {
+            const game = new JigsawPuzzleEngine();
+
+            const fileInput = document.getElementById('imageFileInput');
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        game.loadCustomImage(event.target.result);
+                        document.getElementById('uploadBtnLabel').textContent = "Imagem Carregada com Sucesso!";
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            document.getElementById('btnUploadStart').addEventListener('click', () => fileInput.click());
+            document.getElementById('uploadThumbContainer').addEventListener('click', () => fileInput.click());
+            const headerUploadBtn = document.getElementById('headerUploadBtn');
+            if (headerUploadBtn) {
+                headerUploadBtn.addEventListener('click', () => fileInput.click());
+            }
+
+            let previewTimer = null;
+
+            function startPreviewPhase(onComplete) {
+                const previewModal = document.getElementById('screenPreview');
+                const previewImg = document.getElementById('previewModalImg');
+                const countdownBadge = document.getElementById('previewTimerBadge');
+                const skipBtn = document.getElementById('btnSkipPreview');
+
+                previewImg.src = game.img.src;
+                previewModal.classList.remove('hidden');
+
+                let remaining = 3;
+                countdownBadge.textContent = `${remaining}s`;
+
+                clearInterval(previewTimer);
+
+                const finishPreview = () => {
+                    clearInterval(previewTimer);
+                    previewModal.classList.add('hidden');
+                    onComplete();
+                };
+
+                skipBtn.onclick = finishPreview;
+
+                previewTimer = setInterval(() => {
+                    remaining--;
+                    if (remaining <= 0) {
+                        finishPreview();
+                    } else {
+                        countdownBadge.textContent = `${remaining}s`;
+                    }
+                }, 1000);
+            }
+
+            const playStartBtn = document.getElementById('btnPlayStart');
+            playStartBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                showScreen('screenDifficulty');
+            });
+
+            document.getElementById('btnBackToStart').addEventListener('click', () => showScreen('screenStart'));
+
+            document.querySelectorAll('.difficulty-card').forEach(btn => {
+                const handleDifficulty = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const grid = btn.getAttribute('data-grid');
+                    game.setGridSize(grid);
+                    
+                    startPreviewPhase(() => {
+                        showScreen('screenGame');
+                        game.restartGame();
+                    });
+                };
+                btn.addEventListener('click', handleDifficulty);
+                btn.addEventListener('touchend', handleDifficulty);
+            });
+
+            document.getElementById('btnBackToDifficulty').addEventListener('click', () => {
+                showScreen('screenDifficulty');
+            });
+
+            document.getElementById('btnPlayAgain').addEventListener('click', () => {
+                document.getElementById('screenVictory').classList.add('hidden');
+                game.restartGame();
+            });
+
+            document.getElementById('btnReturnMenu').addEventListener('click', () => {
+                document.getElementById('screenVictory').classList.add('hidden');
+                showScreen('screenStart');
+            });
+        });
+    </script>
+</body>
+</html>
+```
